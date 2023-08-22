@@ -1,0 +1,32 @@
+version: "3"
+services:
+  postgres:
+    image: postgres:11
+    environment:
+      POSTGRES_DB: "${POSTGRES_DBNAME}"
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - "{{ confluence_project_dir }}/postgresql:/var/lib/postgresql/data"
+    networks:
+      - confluence-network
+    restart: always
+
+  confluence:
+    image: haxqer/confluence:8.4.0
+    ports:
+      # - 127.0.0.1:8090:8090
+      - 8090:8090
+      - 127.0.0.1:8091:8091
+    volumes:
+      - "{{ confluence_project_dir }}/confluence:/var/atlassian/application-data/confluence"
+    networks:
+      - confluence-network
+    depends_on:
+      - postgres
+    restart: always
+
+networks:
+  confluence-network:

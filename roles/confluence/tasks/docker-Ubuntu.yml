@@ -1,0 +1,50 @@
+---
+- name: Добавляем ключ GPG для официального репозитория Docker
+  become: true
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /usr/share/keyrings/docker.asc
+    checksum: sha256:1500C1F56FA9E26B9B8F42452A553675796ADE0807CDCE11975EB98170B3A570
+    mode: '0644'
+
+- name: Собираем параметры операционной системы
+  ansible.builtin.setup:
+    gather_subset:
+      - distribution
+      - distribution_release
+
+- name: Добавление Docker в apt-repository
+  become: true
+  ansible.builtin.apt_repository:
+    repo: "deb {{ signature }} https://download.docker.com/linux/{{ distribution }} {{ release }} stable"
+    state: present
+    update_cache: true
+  vars:
+    signature: "[arch=amd64 signed-by=/usr/share/keyrings/docker.asc]"
+    distribution: "{{ ansible_distribution | lower }}"
+    release: "{{ ansible_distribution_release | lower }}"
+
+- name: Устанавливаем Docker и python3-pip
+  become: true
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - python3-pip
+      - python3-docker
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Устанавливаем службу docker в автозагрузку
+  become: true
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Устанвливаем docker-compose
+  become: true
+  ansible.builtin.pip:
+    name:
+      - docker-compose
+    state: present

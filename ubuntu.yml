@@ -1,0 +1,12 @@
+- hosts: confluence
+  gather_facts: false
+  tasks:
+    - name: Подключение роли confluence
+      ansible.builtin.include_role:
+        name: confluence
+      vars:
+        confluence_confluence_admin_email: admin@mail.ru
+        confluence_confluence_admin_login: admin
+        confluence_confluence_admin_password: admin
+        confluence_confluence_admin_fullname: Администратор
+

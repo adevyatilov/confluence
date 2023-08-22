@@ -1,0 +1,15 @@
+---
+- name: Узнаем операционную систему
+  ansible.builtin.setup:
+      gather_subset:
+        - distribution
+
+- name: Задача установка Docker
+  ansible.builtin.include_tasks:
+    file: docker-Ubuntu.yml
+
+# - name: установка Confluence
+#   ansible.builtin.include_tasks:
+#     file: confluence-Ubuntu.yml
+
+

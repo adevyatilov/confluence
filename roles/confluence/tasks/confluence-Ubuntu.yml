@@ -1,0 +1,110 @@
+---
+- name: Запускаем сервисы docker-compose
+  become: true
+  community.docker.docker_compose:
+    project_src: "{{ confluence_project_dir }}/docker-compose"
+    project_name: confluence
+    state: absent
+  failed_when: false
+
+- name: Удаляем директорию проекта
+  become: true
+  file:
+    path: "{{ confluence_project_dir }}"
+    state: absent
+
+- name: Копируем архив c образами haxqer/confluence:8.4.0 и postgres:11
+  ansible.builtin.copy:
+    src: files/confluence.tar
+    dest: confluence.tar
+
+
+- name: Загружаем из архива образы haxqer/confluence:8.4.0 и postgres:11
+  become: true
+  community.docker.docker_image:
+    name: '{{ item }}'
+    source: load
+    load_path: confluence.tar
+    state: present
+  with_items:
+    - haxqer/confluence:8.4.0
+    - postgres:11
+
+- name: Создаем директорию под проект
+  become: true
+  file:
+    path: "{{ confluence_project_dir }}/docker-compose"
+    state: directory
+    recurse: true
+
+- name: Копируем файлы docker-compose
+  become: true
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    validate:
+  with_items:
+    - src: docker-compose-env.ini
+      dest: "{{ confluence_project_dir }}/docker-compose/.env"
+      validate:
+    - src: docker-compose.yml
+      dest: "{{ confluence_project_dir }}/docker-compose"
+
+- name: Останавливаем контейнеры, если запущены
+  become: true
+  community.docker.docker_compose:
+    project_src: "{{ confluence_project_dir }}/docker-compose/"
+    state: absent
+
+- name: Запускаем сервисы docker-compose
+  become: true
+  community.docker.docker_compose:
+    project_src: "{{ confluence_project_dir }}/docker-compose/"
+    project_name: confluence
+    state: present
+  register: docker_service_out
+
+- name: Запоминаем наименование сервисов docker-compose
+  ansible.builtin.set_fact:
+    confluence_postgres_container_name: "{{ docker_service_out['services']['postgres'].keys() | first }}"
+    confluence_confluence_container_name: "{{ docker_service_out['services']['confluence'].keys() | first }}"
+- ansible.builtin.set_fact:
+    confluence_confluence_network_name: "{{  docker_service_out['services']['confluence'][confluence_confluence_container_name]['networks'].keys() | first }}"
+
+- name: Оджидаем пока поднимится confluence
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 8090
+
+- name: Оджидаем пока поднимится служба postgres
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 5432
+
+- name: Установка пакетов для скрипта confluence_easy_install.py
+  become: true
+  ansible.builtin.pip:
+    name:
+      - bs4
+      - lxml
+      - requests
+
+- name: Запускаем скрипт настройки confluence
+  become: true
+  ansible.builtin.script:
+    cmd: scripts/confluence_easy_install.py
+  args:
+    executable: /usr/bin/python3
+  environment:
+    CONFLUENCE_ADMIN_EMAIL: "{{ confluence_confluence_admin_email }}"
+    CONFLUENCE_ADMIN_LOGIN: "{{ confluence_confluence_admin_login }}"
+    CONFLUENCE_ADMIN_PASSWORD: "{{ confluence_confluence_admin_password }}"
+    CONFLUENCE_ADMIN_FULLNAME: "{{ confluence_confluence_admin_fullname }}"
+    DOCKER_CONTAINER_POSTGRES_NAME: "{{ confluence_postgres_container_name }}"
+    DOCKER_CONTAINER_CONFLUENCE_NAME: "{{ confluence_confluence_container_name }}"
+    DOCKER_CONFLUENCR_NETWORK_NAME: "{{ confluence_confluence_network_name }}"
+
+- name: Удаляем архив с образами
+  ansible.builtin.file:
+    path: confluence.tar
+    state: absent
